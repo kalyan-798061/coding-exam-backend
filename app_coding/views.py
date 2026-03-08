@@ -66,8 +66,7 @@ def login_view(request):
         return JsonResponse({"error": "POST method required"}, status=405)
 
     try:
-        body = request.body.decode("utf-8")
-        data = json.loads(body) if body else {}
+        data = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -85,21 +84,23 @@ def login_view(request):
 
     now = timezone.now()
 
-    # contest not started
     if now < settings.CONTEST_START_TIME:
         return JsonResponse({
             "status": "not_started",
             "start_time": settings.CONTEST_START_TIME
         })
 
-    # contest ended
     if now >= settings.CONTEST_END_TIME:
         return JsonResponse({
             "status": "ended"
         })
 
-    return JsonResponse({"status": "exam"})
-    
+    return JsonResponse({
+        "status": "exam",
+        "name": name
+    })
+
+
 @csrf_exempt
 def generate_question_order(request):
 
@@ -114,10 +115,13 @@ def generate_question_order(request):
         return JsonResponse({"error": "session not found"}, status=404)
 
     now = timezone.now()
-    
-    #exam not started
-    if now <= settings.CONTEST_END_TIME:
-        return JsonResponse({"status": "not_started"})
+
+    # exam not started
+    if now < settings.CONTEST_START_TIME:
+        return JsonResponse({
+            "status": "not_started",
+            "start_time": settings.CONTEST_START_TIME
+        })
 
     # exam ended
     if now >= settings.CONTEST_END_TIME:
@@ -136,24 +140,17 @@ def generate_question_order(request):
             .values_list("id", flat=True)
         )
 
-        # safety check
         if len(easy_ids) < 2 or len(hard_ids) < 3:
             return JsonResponse({"error": "Not enough questions in database"})
 
-        selected_questions = (
-            random.sample(easy_ids, 2) +
-            random.sample(hard_ids, 3)
-        )
-
+        selected_questions = random.sample(easy_ids, 2) + random.sample(hard_ids, 3)
         random.shuffle(selected_questions)
 
         session.question_order = selected_questions
         session.current_index = 0
         session.save()
 
-    # get current question
     question_id = session.question_order[session.current_index]
-
     question = Question.objects.get(id=question_id)
 
     return JsonResponse({
@@ -164,7 +161,6 @@ def generate_question_order(request):
         "puzzle_input": question.puzzle_input,
         "marks": question.marks,
     })
-
 
 import json
 from django.http import JsonResponse

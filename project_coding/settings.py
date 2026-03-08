@@ -145,11 +145,11 @@ import pytz
 ist = pytz.timezone('Asia/Kolkata')
 
 CONTEST_START_TIME = make_aware(
-    datetime(2026, 3, 7, 22, 45, 0),
+    datetime(2026, 3, 8, 21, 45, 0),
     ist
 )
 
 CONTEST_END_TIME = make_aware(
-    datetime(2026, 3, 7, 23, 45, 0),
+    datetime(2026, 3, 8, 23, 45, 0),
     ist
 )
