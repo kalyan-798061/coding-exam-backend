@@ -1,0 +1,211 @@
+{
+  "questions": [
+    {
+      "id": 1,
+      "title": "Sum of Numbers",
+      "description": "Given a list of numbers (one per line), calculate the sum of all numbers.\n\nFor example, if the input is:\n1\n2\n3\n\nThe answer would be 6.",
+      "difficulty": "easy",
+      "marks": 10,
+      "examples": [
+        {
+          "input": "1\n2\n3",
+          "output": "6",
+          "explanation": "1 + 2 + 3 = 6"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "Numbers can be negative",
+        "-1000 ≤ number ≤ 1000"
+      ],
+      "puzzle_input": "42\n-17\n88\n23\n-5\n156\n-42\n77\n-31\n99\n8\n-64\n125\n-88\n200\n-10\n55\n33\n-21\n101",
+      "expected_answer": "729"
+    },
+    {
+      "id": 2,
+      "title": "Count Even Numbers",
+      "description": "Given a list of numbers (one per line), count how many of them are even.\n\nFor example, if the input is:\n1\n2\n3\n4\n\nThe answer would be 2 (since 2 and 4 are even).",
+      "difficulty": "easy",
+      "marks": 10,
+      "examples": [
+        {
+          "input": "1\n2\n3\n4",
+          "output": "2",
+          "explanation": "2 and 4 are even numbers"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "-10000 ≤ number ≤ 10000"
+      ],
+      "puzzle_input": "15\n22\n7\n-8\n33\n100\n-44\n91\n56\n3\n18\n-25\n64\n77\n-82\n99\n120\n41\n-36\n55\n88\n13\n-62\n47\n200",
+      "expected_answer": "13"
+    },
+    {
+      "id": 3,
+      "title": "Find Maximum",
+      "description": "Given a list of numbers (one per line), find the maximum value.\n\nFor example, if the input is:\n5\n2\n9\n1\n\nThe answer would be 9.",
+      "difficulty": "easy",
+      "marks": 10,
+      "examples": [
+        {
+          "input": "5\n2\n9\n1",
+          "output": "9",
+          "explanation": "9 is the largest number"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "At least one number will be provided",
+        "-100000 ≤ number ≤ 100000"
+      ],
+      "puzzle_input": "-45\n123\n-88\n456\n22\n-999\n777\n-12\n89\n234\n-567\n888\n-321\n555\n100\n-777\n999\n-100\n42\n-42",
+      "expected_answer": "999"
+    },
+    {
+      "id": 4,
+      "title": "Find Minimum",
+      "description": "Given a list of numbers (one per line), find the minimum value.\n\nFor example, if the input is:\n5\n2\n9\n1\n\nThe answer would be 1.",
+      "difficulty": "easy",
+      "marks": 10,
+      "examples": [
+        {
+          "input": "5\n2\n9\n1",
+          "output": "1",
+          "explanation": "1 is the smallest number"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "At least one number will be provided",
+        "-100000 ≤ number ≤ 100000"
+      ],
+      "puzzle_input": "500\n-123\n888\n-456\n22\n-99\n777\n-1234\n89\n234\n-567\n188\n-321\n555\n100\n-77\n999\n-100\n42\n-42",
+      "expected_answer": "-1234"
+    },
+    {
+      "id": 5,
+      "title": "Count Lines",
+      "description": "Given a text input with multiple lines, count the total number of lines.\n\nFor example, if the input is:\nhello\nworld\ntest\n\nThe answer would be 3.",
+      "difficulty": "easy",
+      "marks": 10,
+      "examples": [
+        {
+          "input": "hello\nworld\ntest",
+          "output": "3",
+          "explanation": "There are 3 lines"
+        }
+      ],
+      "constraints": [
+        "Each line contains at least one character",
+        "Lines are separated by newline characters"
+      ],
+      "puzzle_input": "alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\nindia\njuliet\nkilo\nlima\nmike\nnovember\noscar\npapa\nquebec\nromeo\nsierra\ntango\nuniform\nvictor\nwhiskey\nxray\nyankee\nzulu\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten",
+      "expected_answer": "36"
+    },
+    {
+      "id": 6,
+      "title": "Product of Numbers",
+      "description": "Given a list of numbers (one per line), calculate the product of all numbers.\n\nFor example, if the input is:\n2\n3\n4\n\nThe answer would be 24 (2 × 3 × 4 = 24).",
+      "difficulty": "medium",
+      "marks": 15,
+      "examples": [
+        {
+          "input": "2\n3\n4",
+          "output": "24",
+          "explanation": "2 × 3 × 4 = 24"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "Numbers can be negative",
+        "-100 ≤ number ≤ 100"
+      ],
+      "puzzle_input": "3\n-2\n5\n4\n-1\n2",
+      "expected_answer": "240"
+    },
+    {
+      "id": 7,
+      "title": "Count Odd Numbers",
+      "description": "Given a list of numbers (one per line), count how many of them are odd.\n\nFor example, if the input is:\n1\n2\n3\n4\n5\n\nThe answer would be 3 (since 1, 3, and 5 are odd).",
+      "difficulty": "medium",
+      "marks": 15,
+      "examples": [
+        {
+          "input": "1\n2\n3\n4\n5",
+          "output": "3",
+          "explanation": "1, 3, and 5 are odd numbers"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "-10000 ≤ number ≤ 10000"
+      ],
+      "puzzle_input": "17\n24\n-33\n8\n55\n-100\n42\n-91\n66\n3\n19\n-24\n65\n78\n-81\n98\n123\n40\n-37\n54\n89\n12\n-63\n46\n201",
+      "expected_answer": "12"
+    },
+    {
+      "id": 8,
+      "title": "Average Value",
+      "description": "Given a list of numbers (one per line), calculate the average (mean) value. Round down to the nearest integer.\n\nFor example, if the input is:\n10\n20\n30\n\nThe answer would be 20.",
+      "difficulty": "medium",
+      "marks": 15,
+      "examples": [
+        {
+          "input": "10\n20\n30",
+          "output": "20",
+          "explanation": "(10 + 20 + 30) / 3 = 20"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "At least one number will be provided",
+        "Round down to nearest integer"
+      ],
+      "puzzle_input": "85\n92\n78\n65\n90\n88\n72\n95\n81\n77\n69\n84\n91\n73\n86\n79\n94\n67\n82\n76",
+      "expected_answer": "81"
+    },
+    {
+      "id": 9,
+      "title": "Digit Sum Total",
+      "description": "Given a list of numbers (one per line), calculate the sum of all digits across all numbers. Ignore negative signs.\n\nFor example, if the input is:\n123\n45\n-67\n\nThe answer would be 1+2+3+4+5+6+7 = 28.",
+      "difficulty": "hard",
+      "marks": 20,
+      "examples": [
+        {
+          "input": "123\n45\n-67",
+          "output": "28",
+          "explanation": "Digits: 1,2,3,4,5,6,7 → Sum = 28"
+        }
+      ],
+      "constraints": [
+        "Each line contains one integer",
+        "Ignore negative signs when summing digits",
+        "-1000000 ≤ number ≤ 1000000"
+      ],
+      "puzzle_input": "12345\n-67890\n11111\n-22222\n99999\n-54321\n77777\n-88888\n33333\n-44444\n123\n-456\n789\n-101112\n131415",
+      "expected_answer": "180"
+    },
+    {
+      "id": 10,
+      "title": "Word Frequency",
+      "description": "Given a text with multiple words (space-separated on each line), find the word that appears most frequently. If there's a tie, return the lexicographically smallest word.\n\nFor example, if the input is:\nhello world hello\nworld hello test\n\nThe answer would be 'hello' (appears 3 times).",
+      "difficulty": "hard",
+      "marks": 20,
+      "examples": [
+        {
+          "input": "hello world hello\nworld hello test",
+          "output": "hello",
+          "explanation": "'hello' appears 3 times, 'world' appears 2 times"
+        }
+      ],
+      "constraints": [
+        "Words contain only lowercase letters",
+        "Words are separated by spaces",
+        "At least one word will be provided"
+      ],
+      "puzzle_input": "the quick brown fox jumps over the lazy dog\nthe dog was not that lazy after all\nquick quick the fox said to the dog\nover and over the lazy dog slept\nthe fox jumped over the lazy brown dog",
+      "expected_answer": "the"
+    }
+  ]
+}

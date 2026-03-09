@@ -19,4 +19,6 @@ urlpatterns = [
     path('submit/',views.submit_answer,name='submit_answer'),
     # path('score/',views.total_score,name='total_score'),
     path('generate_question_order/',views.generate_question_order,name='generate_question_order'),
+    path('run_code/',views.run_code,name='run_code'),
+    path('health/',views.health_check,name='health_check'),
 ]   

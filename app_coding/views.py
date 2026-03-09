@@ -1,23 +1,23 @@
-from aiohttp import request
-from django.shortcuts import redirect, render
-from requests import session
-from rest_framework import viewsets
-from .models import *
-from .serializers import QuestionSerializer
-import random
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from .serializers import QuestionSerializer
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-import random
-
-from django.http import HttpResponseRedirect, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from .models import ExamSession, Submission
+from .question_loader import (
+    load_questions,
+    get_question_by_id,
+    get_questions_for_exam,
+    validate_answer,
+    get_questions_by_difficulty,
+)
 import json
+import subprocess
+import tempfile
+import os
+import time
+import random
+import requests as http_requests
 
 
 @csrf_exempt
@@ -47,16 +47,6 @@ def register_view(request):
     )
 
     return JsonResponse({"status": "Registered successfully"}, status=201)
-
-
-import json
-import random
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.utils import timezone
-from django.conf import settings
-from .models import ExamSession, Question
-
 
 
 @csrf_exempt
@@ -103,7 +93,11 @@ def login_view(request):
 
 @csrf_exempt
 def generate_question_order(request):
-
+    """
+    Generate ALL 10 questions for the user in shuffled order.
+    Uses questions.json instead of database.
+    Users can choose which question to solve in any order.
+    """
     name = request.session.get("name")
 
     if not name:
@@ -127,245 +121,311 @@ def generate_question_order(request):
     if now >= settings.CONTEST_END_TIME:
         return JsonResponse({"status": "ended"})
 
-    # generate questions only once
+    # Generate questions only once (from JSON file)
     if not session.question_order:
+        # Load ALL questions from JSON
+        all_questions = load_questions()
+        all_ids = [q["id"] for q in all_questions]
 
-        easy_ids = list(
-            Question.objects.filter(difficulty="easy")
-            .values_list("id", flat=True)
-        )
+        if len(all_ids) < 1:
+            return JsonResponse({
+                "error": "No questions found in questions.json"
+            }, status=500)
 
-        hard_ids = list(
-            Question.objects.filter(difficulty="hard")
-            .values_list("id", flat=True)
-        )
+        # Shuffle the question IDs for this user
+        random.shuffle(all_ids)
 
-        if len(easy_ids) < 2 or len(hard_ids) < 3:
-            return JsonResponse({"error": "Not enough questions in database"})
-
-        selected_questions = random.sample(easy_ids, 2) + random.sample(hard_ids, 3)
-        random.shuffle(selected_questions)
-
-        session.question_order = selected_questions
+        session.question_order = all_ids
         session.current_index = 0
         session.save()
 
-    question_id = session.question_order[session.current_index]
-    question = Question.objects.get(id=question_id)
+    # Return ALL questions in shuffled order (without expected_answer)
+    questions_data = get_questions_for_exam(session.question_order)
+
+    # Get solved questions from Submission model
+    solved_question_ids = list(
+        Submission.objects.filter(
+            question_id__in=session.question_order,
+            is_correct=True
+        ).values_list("question_id", flat=True)
+    )
 
     return JsonResponse({
         "status": "exam",
-        "question_id": question.id,
-        "title": question.title,
-        "description": question.description,
-        "puzzle_input": question.puzzle_input,
-        "marks": question.marks,
+        "questions": questions_data,
+        "solved_question_ids": solved_question_ids,
+        "total_score": session.score,
     })
-
-import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from .models import ExamSession, Question
-
-
-import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.db import transaction
-from .models import ExamSession, Question
 
 
 @csrf_exempt
 def submit_answer(request):
-
+    """
+    Submit answer for a specific question.
+    Validates the answer using JSON data (exact match).
+    Allows resubmission for wrong answers.
+    
+    Accepts: { "question_id": ..., "answer": "..." }
+    Returns: { "status": "correct"|"wrong", "score": ... }
+    """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
 
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     name = request.session.get("name")
+    question_id = data.get("question_id")
     user_answer = data.get("answer")
 
-    if not name or user_answer is None:
-        return JsonResponse({"error": "name and answer required"}, status=400)
+    if not name:
+        return JsonResponse({"error": "session expired"}, status=400)
+    
+    if question_id is None or user_answer is None:
+        return JsonResponse({"error": "question_id and answer required"}, status=400)
 
     try:
         with transaction.atomic():
-
-            # lock this session row until transaction completes
+            # Lock this session row until transaction completes
             session = (
                 ExamSession.objects
                 .select_for_update()
                 .get(name=name)
             )
 
-            # exam already finished
-            if session.current_index >= len(session.question_order):
+            # Verify question is in user's question set
+            if question_id not in session.question_order:
+                return JsonResponse({"error": "Invalid question"}, status=400)
+
+            # Get question from JSON
+            question = get_question_by_id(question_id)
+            if not question:
+                return JsonResponse({"error": "Question not found in questions.json"}, status=404)
+
+            # Check if already solved correctly
+            existing_correct = Submission.objects.filter(
+                question_id=question_id,
+                is_correct=True
+            ).exists()
+
+            if existing_correct:
                 return JsonResponse({
-                    "status": "finished",
-                    "final_score": session.score
+                    "status": "already_solved",
+                    "message": "You have already solved this question correctly!",
+                    "score": session.score,
                 })
 
-            question_id = session.question_order[session.current_index]
+            # Validate answer using exact match
+            validation = validate_answer(question_id, user_answer)
+            is_correct = validation["is_correct"]
 
-            try:
-                question = Question.objects.get(id=question_id)
-            except Question.DoesNotExist:
-                return JsonResponse({"error": "question missing"}, status=404)
+            # Create submission record
+            Submission.objects.create(
+                question_id=question_id,
+                submitted_answer=str(user_answer).strip(),
+                is_correct=is_correct,
+                marks_awarded=question["marks"] if is_correct else 0,
+            )
 
-            # check answer
-            correct = str(user_answer).strip().upper() == str(question.expected_answer).strip().upper()
+            if is_correct:
+                session.score += question["marks"]
+                session.save()
 
-            if correct:
-                session.score += question.marks
+                # Check if all questions solved
+                solved_count = Submission.objects.filter(
+                    question_id__in=session.question_order,
+                    is_correct=True
+                ).values("question_id").distinct().count()
 
-            session.current_index += 1
-            session.save()
-
-            # exam finished
-            if session.current_index >= len(session.question_order):
+                all_solved = solved_count >= len(session.question_order)
 
                 return JsonResponse({
-                    "status": "finished",
-                    "final_score": session.score
+                    "status": "correct",
+                    "message": "Correct answer!",
+                    "marks_awarded": question["marks"],
+                    "score": session.score,
+                    "all_solved": all_solved,
                 })
-
-            next_question_id = session.question_order[session.current_index]
-
-            try:
-                next_question = Question.objects.get(id=next_question_id)
-            except Question.DoesNotExist:
-                return JsonResponse({"error": "next question missing"}, status=404)
-
-            return JsonResponse({
-                "status": "next_question",
-                "question_id": next_question.id,
-                "title": next_question.title,
-                "description": next_question.description,
-                "puzzle_input": next_question.puzzle_input,
-                "marks": next_question.marks
-            })
+            else:
+                return JsonResponse({
+                    "status": "wrong",
+                    "message": "Wrong answer. Try again!",
+                    "score": session.score,
+                })
 
     except ExamSession.DoesNotExist:
         return JsonResponse({"error": "session not found"}, status=404)
 
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
-# def submit_answer(request):
-#     user = request.user
-#     submitted_answer = request.data.get("answer", "").strip()
 
-#     try:
-#         session = ExamSession.objects.get(user=user)
-#     except ExamSession.DoesNotExist:
-#         return Response({"error": "Exam not started"}, status=400)
+# ─── CODE EXECUTION ENDPOINT ────────────────────────────────────────────────────
 
-#     total_questions = len(session.question_order)
+CODE_RUNNER_URL = os.environ.get("CODE_RUNNER_URL", "http://localhost:3001/run")
+CODE_EXECUTION_TIMEOUT = 10  # seconds (for local fallback)
+MAX_OUTPUT_LENGTH = 50000    # characters
 
-#     if session.current_index >= total_questions:
-#         return Response({
-#             "exam_finished": True,
-#             "message": "All questions already submitted"
-#         })
-
-#     question_id = session.question_order[session.current_index]
-#     question = Question.objects.get(id=question_id)
-
-#     # Prevent duplicate submission
-#     if Submission.objects.filter(user=user, question=question).exists():
-#         return Response({"error": "Already answered"}, status=400)
-
-#     is_correct = submitted_answer == question.expected_answer.strip()
-#     marks_awarded = question.marks if is_correct else 0
-
-#     Submission.objects.create(
-#         user=user,
-#         question=question,
-#         submitted_answer=submitted_answer,
-#         is_correct=is_correct,
-#         marks_awarded=marks_awarded
-#     )
-
-#     # Move to next question
-#     session.current_index += 1
-#     session.save()
-
-#     # 🔥 Check if this was last question
-#     if session.current_index >= total_questions:
-#         return Response({
-#             "correct": is_correct,
-#             "marks_awarded": marks_awarded,
-#             "exam_finished": True,
-#             "message": "All questions submitted"
-#         })
-
-#     return Response({
-#         "correct": is_correct,
-#         "marks_awarded": marks_awarded,
-#         "exam_finished": False
-#     })
-
-
-
-
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
-# def total_score(request):
-#     user = request.user
-
-#     total = Submission.objects.filter(user=user).aggregate(
-#         total=models.Sum('marks_awarded')
-#     )['total'] or 0
-
-#     return Response({"total_score": total})
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
-# def start_exam(request):
-
-#     # ✅ Calculate remaining time
-#     # remaining_seconds = (settings.CONTEST_END_TIME - now).total_seconds()
-
-#     question_ids = list(Question.objects.values_list('id', flat=True))
-#     random.shuffle(question_ids)
-
-#     ExamSession.objects.create(
-#         user=user,
-#         question_order=question_ids,
-#         current_index=0,
-#         end_time=settings.CONTEST_END_TIME  # important
-#     )
+@csrf_exempt
+def run_code(request):
+    """
+    Execute user-submitted code.
     
-#     question_id = session.question_order[session.current_index]
-#     question = Question.objects.get(id=question_id)
+    First tries the CodeSandbox-powered code-runner service (Node.js on port 3001).
+    Falls back to local subprocess execution if the service is unavailable.
+    
+    Accepts: { "code": "...", "language": "python", "puzzleInput": "..." }
+    Returns: { "status": "success"|"error", "stdout": "...", "stderr": "...", "executionTime": ... }
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST method required"}, status=405)
 
-#     remaining_seconds = int((session.end_time - timezone.now()).total_seconds())
+    try:
+        data = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-#     return Response({
-#         "question_id": question.id,
-#         "title": question.title,
-#         "description": question.description,
-#         "puzzle_input": question.puzzle_input,
-#         "current_index": session.current_index,
-#         "total_questions": len(session.question_order),
-#         "is_last_question": session.current_index == len(session.question_order) - 1,
-#         "remaining_seconds": remaining_seconds
-#     })
+    code = data.get("code", "")
+    language = data.get("language", "python")
+    puzzle_input = data.get("puzzleInput", "")
 
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
-# def current_question(request):
-#     user = request.user
+    if not code.strip():
+        return JsonResponse({"error": "No code provided"}, status=400)
 
-#     try:
-#         session = ExamSession.objects.get(user=user)
-#     except ExamSession.DoesNotExist:
-#         return Response({"error": "Exam not started"}, status=400)
+    # ─── Try CodeSandbox code-runner service first ───────────────────────────────
+    try:
+        response = http_requests.post(
+            CODE_RUNNER_URL,
+            json={
+                "code": code,
+                "language": language,
+                "puzzleInput": puzzle_input,
+            },
+            timeout=60,  # Allow up to 60s for sandbox operations
+        )
+        
+        if response.status_code == 200:
+            result_data = response.json()
+            # Check if code-runner returned an actual successful execution
+            # If it returned an error (e.g., sandbox creation failed), fall back to local
+            if result_data.get("status") == "success":
+                stdout = result_data.get("stdout", "")
+                # If code-runner returns "(no output)" or empty, and this is Python,
+                # fall back to local execution as CodeSandbox may have issues
+                if language == "python" and stdout in ("(no output)", ""):
+                    print(f"[run_code] Code-runner returned empty output, falling back to local subprocess")
+                else:
+                    return JsonResponse(result_data)
+            elif result_data.get("status") == "error":
+                # Check if it's a sandbox/infrastructure error vs code error
+                stderr = result_data.get("stderr", "")
+                if "sandbox" in stderr.lower() or "unauthorized" in stderr.lower() or "failed to" in stderr.lower():
+                    # Infrastructure error, fall back to local execution
+                    print(f"[run_code] Code-runner infrastructure error, falling back to local: {stderr}")
+                else:
+                    # Actual code execution error, return it
+                    return JsonResponse(result_data)
+        else:
+            # Service returned an error, fall through to local execution
+            error_data = response.json()
+            if "error" in error_data:
+                print(f"[run_code] Code-runner HTTP error: {error_data}")
+                
+    except http_requests.exceptions.ConnectionError:
+        # Code-runner service not running, fall back to local execution
+        pass
+    except http_requests.exceptions.Timeout:
+        return JsonResponse({
+            "status": "error",
+            "stderr": "Code execution timed out (remote service).",
+            "executionTime": 60000,
+        })
+    except Exception as e:
+        # Log but continue to fallback
+        print(f"[run_code] Code-runner service error: {e}")
 
-#     if session.current_index >= len(session.question_order):
-#         return Response({"message": "Exam finished"})
+    # ─── Fallback: Local subprocess execution (Python only) ──────────────────────
+    if language != "python":
+        return JsonResponse({
+            "error": f"Language '{language}' requires the code-runner service. Please start it with: cd code-runner && npm start"
+        }, status=503)
 
-#     question_id = session.question_order[session.current_index]
-#     question = Question.objects.get(id=question_id)
+    start_time = time.time()
+    tmp_path = None
 
-#     serializer = QuestionSerializer(question)
-#     return Response(serializer.data)
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, dir="/tmp"
+        ) as tmp:
+            tmp.write(code)
+            tmp_path = tmp.name
+
+        result = subprocess.run(
+            ["python3", tmp_path],
+            input=puzzle_input,
+            capture_output=True,
+            text=True,
+            timeout=CODE_EXECUTION_TIMEOUT,
+            cwd="/tmp",
+        )
+
+        execution_time = int((time.time() - start_time) * 1000)
+
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+
+        if len(stdout) > MAX_OUTPUT_LENGTH:
+            stdout = stdout[:MAX_OUTPUT_LENGTH] + "\n... (output truncated)"
+        if len(stderr) > MAX_OUTPUT_LENGTH:
+            stderr = stderr[:MAX_OUTPUT_LENGTH] + "\n... (output truncated)"
+
+        if result.returncode != 0:
+            return JsonResponse({
+                "status": "error",
+                "stdout": stdout,
+                "stderr": stderr,
+                "executionTime": execution_time,
+            })
+
+        return JsonResponse({
+            "status": "success",
+            "stdout": stdout if stdout else "(no output)",
+            "stderr": stderr,
+            "executionTime": execution_time,
+        })
+
+    except subprocess.TimeoutExpired:
+        execution_time = int((time.time() - start_time) * 1000)
+        return JsonResponse({
+            "status": "error",
+            "stderr": f"Execution timed out after {CODE_EXECUTION_TIMEOUT} seconds.",
+            "executionTime": execution_time,
+        })
+
+    except Exception as e:
+        execution_time = int((time.time() - start_time) * 1000)
+        return JsonResponse({
+            "status": "error",
+            "stderr": f"Server error: {str(e)}",
+            "executionTime": execution_time,
+        })
+
+    finally:
+        # Clean up the temp file if it was created
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+# ─── HEALTH CHECK ENDPOINT ────────────────────────────────────────────────────
+
+def health_check(request):
+    """
+    Health check endpoint for Railway deployment.
+    Returns 200 OK if the service is running.
+    """
+    return JsonResponse({
+        "status": "healthy",
+        "service": "codearena-backend",
+    })

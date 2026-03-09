@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,12 +21,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-qg9f56hm#s4y@o@dcp-es8u-(afvo@64nsw$^vwg9t##*umozv'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-qg9f56hm#s4y@o@dcp-es8u-(afvo@64nsw$^vwg9t##*umozv')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = []
+# Railway sets RAILWAY_ENVIRONMENT and provides a public domain
+RAILWAY_ENVIRONMENT = os.environ.get('RAILWAY_ENVIRONMENT')
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+if os.environ.get('RAILWAY_PUBLIC_DOMAIN'):
+    ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN'))
+# Allow custom domain if set
+if os.environ.get('ALLOWED_HOST'):
+    ALLOWED_HOSTS.append(os.environ.get('ALLOWED_HOST'))
 
 
 # Application definition
@@ -42,26 +51,32 @@ INSTALLED_APPS = [
     'corsheaders',
 ]
 APPEND_SLASH = False
+# CORS settings - allow frontend origins
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
+# Add production frontend URL if set
+if os.environ.get('FRONTEND_URL'):
+    CORS_ALLOWED_ORIGINS.append(os.environ.get('FRONTEND_URL'))
 
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
 ]
+if os.environ.get('FRONTEND_URL'):
+    CSRF_TRUSTED_ORIGINS.append(os.environ.get('FRONTEND_URL'))
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'project_coding.urls'
@@ -88,12 +103,24 @@ WSGI_APPLICATION = 'project_coding.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Use DATABASE_URL in production (Railway provides this), else SQLite for local dev
+import dj_database_url
+
+if os.environ.get('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -131,6 +158,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# WhiteNoise configuration for serving static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -145,11 +176,11 @@ import pytz
 ist = pytz.timezone('Asia/Kolkata')
 
 CONTEST_START_TIME = make_aware(
-    datetime(2026, 3, 8, 21, 45, 0),
+    datetime(2026, 3, 9, 10, 45, 0),
     ist
 )
 
 CONTEST_END_TIME = make_aware(
-    datetime(2026, 3, 8, 23, 45, 0),
+    datetime(2026, 3, 10, 23, 45, 0),
     ist
 )
