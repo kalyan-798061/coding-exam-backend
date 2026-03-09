@@ -1,4 +1,4 @@
-from aiohttp import request
+
 from django.shortcuts import redirect, render
 from requests import session
 from rest_framework import viewsets
