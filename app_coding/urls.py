@@ -19,4 +19,5 @@ urlpatterns = [
     path('submit/',views.submit_answer,name='submit_answer'),
     # path('score/',views.total_score,name='total_score'),
     path('generate_question_order/',views.generate_question_order,name='generate_question_order'),
+    # path("execute/", views.execute_view,name="execute_view"),
 ]   

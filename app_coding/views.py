@@ -369,3 +369,33 @@ def submit_answer(request):
 
 #     serializer = QuestionSerializer(question)
 #     return Response(serializer.data)
+
+
+
+# import json
+# from django.http import JsonResponse
+# from django.views.decorators.csrf import csrf_exempt
+# from .services.code_executor import execute_code
+
+# @csrf_exempt
+# def execute_view(request):
+
+#     if request.method != "POST":
+#         return JsonResponse({"error": "POST required"}, status=405)
+
+#     try:
+#         body = json.loads(request.body)
+
+#         code = body.get("code")
+#         language = body.get("language")
+#         puzzle_input = body.get("puzzleInput", "")
+
+#         result = execute_code(code, language, puzzle_input)
+
+#         return JsonResponse(result)
+
+#     except Exception as e:
+#         return JsonResponse({
+#             "status": "error",
+#             "stderr": str(e)
+#         })

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -23,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-qg9f56hm#s4y@o@dcp-es8u-(afvo@64nsw$^vwg9t##*umozv'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = []
 
@@ -62,7 +63,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
 ]
+
+DEBUG = False
+
+ALLOWED_HOSTS = ["codearena.com"]
+STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
 ROOT_URLCONF = 'project_coding.urls'
 
@@ -145,11 +154,11 @@ import pytz
 ist = pytz.timezone('Asia/Kolkata')
 
 CONTEST_START_TIME = make_aware(
-    datetime(2026, 3, 8, 21, 45, 0),
+    datetime(2026, 3, 9, 11, 0, 0),
     ist
 )
 
 CONTEST_END_TIME = make_aware(
-    datetime(2026, 3, 8, 23, 45, 0),
+    datetime(2026, 3, 10, 23, 45, 0),
     ist
 )
